@@ -2277,7 +2277,7 @@
     wraithc: [
       {icon:'👻', label:'Soul Seekers',key:'Q', max:1.8, run:()=>soulSeekers(3, cls.atk+8)},
       {icon:'🌫️', label:'Phase Shift', key:'E', max:2.4, run:()=>phaseShift()},
-      {icon:'😱', label:'Banshee Wail',key:'R', max:4,   run:()=>bansheeWail(185, cls.atk+10)},
+      {icon:'🕳️', label:'Banshee Wail',key:'R', max:16,  run:()=>bansheeWail(185, cls.atk+6)},
     ],
     rotknight: [
       {icon:'🎳', label:'Barrel Roll', key:'Q', max:3,   run:()=>barrelRoll()},
@@ -3133,11 +3133,9 @@
       netFx({k:'fx',fx:{kind:'beam',x:ox,y:oy,angle:a,len:radius,dur:0.6,width:30,soul:true}}); }
     addFx({kind:'nova',x:player.x,y:player.y,dur:0.5,radius,dmg:0,color:'#8fc9d6',kb:0,hit:true});
     netFx({k:'fx',fx:{kind:'nova',x:player.x,y:player.y,dur:0.5,radius,color:'#8fc9d6',kb:0,hit:true}});
-    for(const b of sceneBots()){ const d=Math.hypot(b.x-player.x,b.y-player.y);
-      if(d<radius+b.r){ damageBot(b,dmg); b.fearT=0; b.aggro=AGGRO_TIME;   // reeled in, so they turn on you instead of fleeing
-        b.pullT=0.75; b.pullX=player.x; b.pullY=player.y;                  // dragged in over time, not teleported
-        wFloats.push({x:b.x,y:b.y-b.r-8,val:dmg,life:0.6}); } }
-    for(const pl of netScenePlayers()){ if(Math.hypot(pl.x-player.x,pl.y-player.y)<radius+pl.r) netHitPlayer(pl.id,dmg); } }
+    // the scream tears open a black hole that sits there for 5s, swallowing everything nearby
+    addFx({kind:'blackhole', x:player.x, y:player.y, r:radius, dur:5, dmg, dtick:0, anim:0});
+    netFx({k:'fx', fx:{kind:'blackhole', x:player.x, y:player.y, r:radius, dur:5, dmg, dtick:0, anim:0}}); }
   function barrelRoll(){ sfx.crit&&sfx.crit(); player.swing=0.2;
     const mv=moveVector(); const a = (Math.abs(mv.x)>0.15||Math.abs(mv.y)>0.15) ? Math.atan2(mv.y,mv.x) : (player.face>0?0:Math.PI);   // roll where you're aiming/facing — no auto-target
     player.rollA=a; player.rollT=0.55; player.rollHit=new Set(); player.rollSpin=0; player.face=Math.cos(a)>=0?1:-1; }
@@ -3765,6 +3763,15 @@
         else { for(const pl of netScenePlayers()){ if(Math.hypot(pl.x-fx.x, pl.y-fx.y) < cur+pl.r){ fx.hit=true; const crit=Math.random()<cls.crit, d=Math.max(1,Math.round(fx.dmg*(crit?2:1))); netHitPlayer(pl.id,d); wFloats.push({x:pl.x,y:pl.y-pl.r-8,val:d,crit,life:0.8}); crit?sfx.crit():sfx.hit(); break; } } }
       } else if(fx.kind==='healzone'){ if(!fx.ghost && Math.hypot(player.x-fx.x, player.y-fx.y) < fx.r){ player.hp=Math.min(player.max, player.hp+fx.dps*dt);
         if(Math.random()<dt*3) wFloats.push({x:player.x+(Math.random()-.5)*16, y:player.y-player.r, val:'+', heal:true, life:0.6}); } }
+      else if(fx.kind==='blackhole'){ fx.anim=(fx.anim||0)+dt;   // persistent vortex: keeps sucking everything in
+        if(!fx.ghost){
+          fx.dtick=(fx.dtick||0)-dt; const tick = fx.dtick<=0; if(tick) fx.dtick=0.5;
+          for(const b of sceneBots()){ const d=Math.hypot(b.x-fx.x, b.y-fx.y);
+            if(d<fx.r+b.r){ b.pullT=Math.max(b.pullT||0,0.15); b.pullX=fx.x; b.pullY=fx.y;   // refreshed each frame → continuous drag
+              b.fearT=0; b.aggro=AGGRO_TIME;
+              if(tick){ damageBot(b, fx.dmg); wFloats.push({x:b.x,y:b.y-b.r-8,val:fx.dmg,life:0.5}); } } }
+          if(tick) for(const pl of netScenePlayers()){ if(Math.hypot(pl.x-fx.x, pl.y-fx.y) < fx.r+pl.r) netHitPlayer(pl.id, fx.dmg); }
+        } }
       else if(fx.kind==='dome'){ if(!fx.ghost){ const o=fx.owner||player; fx.x=o.x; fx.y=o.y; } }
       else if(fx.kind==='meteor' && !fx.exploded && fx.t > fx.dur-0.28){ fx.exploded=true; sfx.crit();
         $('flash').classList.remove('on'); void $('flash').offsetWidth; $('flash').classList.add('on');
@@ -4494,6 +4501,30 @@
         Wx.fillStyle=grad; Wx.fillRect(0,-wdt/2,fx.len,wdt);
         Wx.fillStyle='rgba(255,255,255,.95)'; Wx.fillRect(0,-wdt/6,fx.len,wdt/3);
       }
+    } else if(fx.kind==='blackhole'){
+      const an=fx.anim||0, fade = p<0.08 ? p/0.08 : (p>0.85 ? Math.max(0,(1-p)/0.15) : 1);
+      const R=fx.r, core=Math.max(14, R*0.17);
+      Wx.translate(fx.x, fx.y);
+      Wx.globalAlpha=fade*0.5; Wx.globalCompositeOperation='lighter';   // outer pull-halo
+      const halo=Wx.createRadialGradient(0,0,core,0,0,R);
+      halo.addColorStop(0,'rgba(120,190,255,.55)'); halo.addColorStop(.55,'rgba(70,110,255,.22)'); halo.addColorStop(1,'rgba(40,60,180,0)');
+      Wx.fillStyle=halo; Wx.beginPath(); Wx.arc(0,0,R,0,7); Wx.fill();
+      Wx.globalAlpha=fade*0.85;                                          // matter spiralling inward
+      for(let i=0;i<14;i++){
+        const t=(an*0.9 + i/14) % 1, rr=core + (R-core)*(1-t), aa=i*2.4 + an*3.2 + t*5.0;
+        const s=(1-t)*3.4+1.2;
+        Wx.fillStyle='rgba(190,235,255,'+(0.75*t+0.15)+')';
+        Wx.beginPath(); Wx.arc(Math.cos(aa)*rr, Math.sin(aa)*rr*0.62, s, 0, 7); Wx.fill();
+      }
+      Wx.globalAlpha=fade; Wx.strokeStyle='rgba(150,215,255,.85)'; Wx.lineWidth=3;   // accretion ring
+      Wx.beginPath(); Wx.ellipse(0,0,core*2.1,core*1.3,an*0.8,0,7); Wx.stroke();
+      Wx.globalCompositeOperation='source-over';
+      const evt=Wx.createRadialGradient(0,0,core*0.25,0,0,core*1.25);     // event horizon — a real hole
+      evt.addColorStop(0,'rgba(0,0,0,'+fade+')'); evt.addColorStop(.72,'rgba(6,4,24,'+(fade*0.96)+')');
+      evt.addColorStop(1,'rgba(40,30,90,0)');
+      Wx.globalAlpha=1; Wx.fillStyle=evt; Wx.beginPath(); Wx.arc(0,0,core*1.25,0,7); Wx.fill();
+      Wx.globalAlpha=fade*0.9; Wx.strokeStyle='rgba(190,225,255,.9)'; Wx.lineWidth=2;
+      Wx.beginPath(); Wx.arc(0,0,core,0,7); Wx.stroke();
     } else if(fx.kind==='nova'){
       const cur=fx.radius*p; Wx.globalAlpha=1-p; Wx.strokeStyle=fx.color||'#7fd8ff'; Wx.lineWidth=10*(1-p)+3;
       Wx.beginPath(); Wx.arc(fx.x, fx.y, cur, 0, 7); Wx.stroke();
