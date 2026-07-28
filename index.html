@@ -314,11 +314,7 @@
     transition: transform .12s, box-shadow .12s;
     animation: cardDeal .5s cubic-bezier(.2,1.35,.4,1) backwards;
   }
-  .cs-cards .cs-card:nth-child(1){ animation-delay:.04s; } .cs-cards .cs-card:nth-child(2){ animation-delay:.1s; }
-  .cs-cards .cs-card:nth-child(3){ animation-delay:.16s; } .cs-cards .cs-card:nth-child(4){ animation-delay:.22s; }
-  .cs-cards .cs-card:nth-child(5){ animation-delay:.28s; } .cs-cards .cs-card:nth-child(6){ animation-delay:.34s; }
-  .cs-cards .cs-card:nth-child(7){ animation-delay:.4s; } .cs-cards .cs-card:nth-child(8){ animation-delay:.46s; }
-  .cs-cards .cs-card:nth-child(9){ animation-delay:.52s; }
+  /* deal-in stagger is set per visible card in refreshClassLocks() — see there */
   .cs-card[data-class="ranger"] .cs-banner{ background:linear-gradient(180deg,#8fd694,#3aa655); }
   .cs-card[data-class="cryo"]   .cs-banner{ background:linear-gradient(180deg,#8fd8ff,#3a8fd6); }
   .cs-card[data-class="blade"]  .cs-banner{ background:linear-gradient(180deg,#ff9a6b,#c65a2b); }
@@ -1882,11 +1878,18 @@
   function classReqText(key){ const r=CLASS_REQ[key]; return r ? r.text : ''; }
   // classes you haven't unlocked simply don't appear on the menu
   function refreshClassLocks(){
+    let shown = 0;
     classSelect.querySelectorAll('.cs-card').forEach(card => {
       const key = card.dataset.class, locked = !classUnlocked(key);
       card.style.display = locked ? 'none' : '';
       card.classList.remove('locked');
       const ov = card.querySelector('.cs-lock'); if(ov) ov.remove();
+      // stagger the deal-in over the VISIBLE cards only, so every card animates no matter how
+      // many there are (CSS nth-child stopped at 9 and counted hidden cards, leaving gaps)
+      if(!locked){ card.style.animation='none'; void card.offsetWidth;   // restart the animation each time the picker opens
+        const d = Math.min(0.04 + shown*0.05, 0.9);                      // cap so a big roster never feels slow
+        card.style.animation='cardDeal .5s cubic-bezier(.2,1.35,.4,1) '+d.toFixed(2)+'s backwards';
+        shown++; }
     });
   }
   classSelect.querySelectorAll('.cs-card').forEach(card => {
