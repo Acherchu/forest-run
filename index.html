@@ -3128,15 +3128,14 @@
   // caught in it toward you, the same vortex pull the Wraith boss uses for Soul Drag.
   function bansheeWail(radius,dmg){ sfx.crit&&sfx.crit();
     const N=8, ox=player.x, oy=player.y-player.r*0.5, spin=Math.random()*6.2832;
-    for(let i=0;i<N;i++){ const a=spin+i/N*6.2832;   // ring of blue beams bursting outward
-      addFx({kind:'beam',x:ox,y:oy,angle:a,len:radius,dur:0.45,width:20});
-      netFx({k:'fx',fx:{kind:'beam',x:ox,y:oy,angle:a,len:radius,dur:0.45,width:20}}); }
+    for(let i=0;i<N;i++){ const a=spin+i/N*6.2832;   // ring of blue soul-beams bursting outward
+      addFx({kind:'beam',x:ox,y:oy,angle:a,len:radius,dur:0.6,width:30,soul:true});
+      netFx({k:'fx',fx:{kind:'beam',x:ox,y:oy,angle:a,len:radius,dur:0.6,width:30,soul:true}}); }
     addFx({kind:'nova',x:player.x,y:player.y,dur:0.5,radius,dmg:0,color:'#8fc9d6',kb:0,hit:true});
     netFx({k:'fx',fx:{kind:'nova',x:player.x,y:player.y,dur:0.5,radius,color:'#8fc9d6',kb:0,hit:true}});
     for(const b of sceneBots()){ const d=Math.hypot(b.x-player.x,b.y-player.y);
-      if(d<radius+b.r){ damageBot(b,dmg); b.fearT=0; b.aggro=AGGRO_TIME;   // yanked in, so they turn on you instead of fleeing
-        const ka=Math.atan2(player.y-b.y,player.x-b.x), pull=Math.min(Math.max(d-46,0),170);
-        b.x+=Math.cos(ka)*pull; b.y+=Math.sin(ka)*pull;
+      if(d<radius+b.r){ damageBot(b,dmg); b.fearT=0; b.aggro=AGGRO_TIME;   // reeled in, so they turn on you instead of fleeing
+        b.pullT=0.75; b.pullX=player.x; b.pullY=player.y;                  // dragged in over time, not teleported
         wFloats.push({x:b.x,y:b.y-b.r-8,val:dmg,life:0.6}); } }
     for(const pl of netScenePlayers()){ if(Math.hypot(pl.x-player.x,pl.y-player.y)<radius+pl.r) netHitPlayer(pl.id,dmg); } }
   function barrelRoll(){ sfx.crit&&sfx.crit(); player.swing=0.2;
@@ -3394,6 +3393,10 @@
   }
   function botStep(bot, dt){
     if(bot.frozenT>0){ bot.frozenT-=dt; return; }   // frozen solid — can't move or act
+    if(bot.pullT>0){ bot.pullT-=dt;                 // caught in a Banshee Wail vortex — dragged in, can't fight it
+      const a=Math.atan2((bot.pullY||0)-bot.y,(bot.pullX||0)-bot.x), d=Math.hypot((bot.pullX||0)-bot.x,(bot.pullY||0)-bot.y);
+      if(d>52){ bot.x+=Math.cos(a)*300*dt; bot.y+=Math.sin(a)*300*dt; }
+      bot.face=Math.cos(a)>0?1:-1; return; }
     if(bot.fearT>0){ bot.fearT-=dt; bot.aggro=0;    // scared by a Zombie surfacing → flee from the player
       const a=Math.atan2(bot.y-player.y, bot.x-player.x), es=BOT_SPD*1.15;
       bot.x=Math.max(bot.r,Math.min(Wc.width-bot.r, bot.x+Math.cos(a)*es*dt)); bot.y=Math.max(bot.r,Math.min(Wc.height-bot.r, bot.y+Math.sin(a)*es*dt)); bot.face=Math.cos(a)>0?1:-1; return; }
@@ -4467,12 +4470,30 @@
       Wx.restore(); return; }
     if(fx.kind==='beam'){
       Wx.translate(fx.x, fx.y); Wx.rotate(fx.angle);
-      Wx.globalAlpha=Math.sin(p*Math.PI);
-      const wdt=fx.width*(0.7+0.3*Math.sin(fx.t*40));
-      const grad=Wx.createLinearGradient(0,0,fx.len,0);
-      grad.addColorStop(0,'#e9f6ff'); grad.addColorStop(.4,'#4aa3ff'); grad.addColorStop(1,'rgba(74,163,255,0)');
-      Wx.fillStyle=grad; Wx.fillRect(0,-wdt/2,fx.len,wdt);
-      Wx.fillStyle='rgba(255,255,255,.95)'; Wx.fillRect(0,-wdt/6,fx.len,wdt/3);
+      if(fx.soul){   // BANSHEE WAIL — a tapered spectral lance that lashes outward, then fades
+        const fade=Math.sin(p*Math.PI), reach=fx.len*Math.min(1, p*2.4), w=fx.width*(1-p*0.4);
+        Wx.globalCompositeOperation='lighter';
+        Wx.globalAlpha=fade*0.55;                                   // wide outer haze
+        const g1=Wx.createLinearGradient(0,0,reach,0);
+        g1.addColorStop(0,'rgba(160,235,255,.95)'); g1.addColorStop(.5,'rgba(74,163,255,.45)'); g1.addColorStop(1,'rgba(60,120,255,0)');
+        Wx.fillStyle=g1; Wx.beginPath();
+        Wx.moveTo(0,-w*0.8); Wx.lineTo(reach,-w*0.16); Wx.lineTo(reach,w*0.16); Wx.lineTo(0,w*0.8); Wx.closePath(); Wx.fill();
+        Wx.globalAlpha=fade*0.95;                                   // bright inner core
+        const g2=Wx.createLinearGradient(0,0,reach,0);
+        g2.addColorStop(0,'rgba(240,252,255,.98)'); g2.addColorStop(.6,'rgba(150,220,255,.4)'); g2.addColorStop(1,'rgba(150,220,255,0)');
+        Wx.fillStyle=g2; Wx.beginPath();
+        Wx.moveTo(0,-w*0.24); Wx.lineTo(reach,-w*0.05); Wx.lineTo(reach,w*0.05); Wx.lineTo(0,w*0.24); Wx.closePath(); Wx.fill();
+        Wx.globalAlpha=fade*0.7; Wx.fillStyle='rgba(215,245,255,.9)';   // spark at the tip
+        Wx.beginPath(); Wx.arc(reach, 0, w*0.16, 0, 7); Wx.fill();
+        Wx.globalCompositeOperation='source-over';
+      } else {
+        Wx.globalAlpha=Math.sin(p*Math.PI);
+        const wdt=fx.width*(0.7+0.3*Math.sin(fx.t*40));
+        const grad=Wx.createLinearGradient(0,0,fx.len,0);
+        grad.addColorStop(0,'#e9f6ff'); grad.addColorStop(.4,'#4aa3ff'); grad.addColorStop(1,'rgba(74,163,255,0)');
+        Wx.fillStyle=grad; Wx.fillRect(0,-wdt/2,fx.len,wdt);
+        Wx.fillStyle='rgba(255,255,255,.95)'; Wx.fillRect(0,-wdt/6,fx.len,wdt/3);
+      }
     } else if(fx.kind==='nova'){
       const cur=fx.radius*p; Wx.globalAlpha=1-p; Wx.strokeStyle=fx.color||'#7fd8ff'; Wx.lineWidth=10*(1-p)+3;
       Wx.beginPath(); Wx.arc(fx.x, fx.y, cur, 0, 7); Wx.stroke();
