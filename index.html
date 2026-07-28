@@ -4467,13 +4467,41 @@
       Wx.globalAlpha=0.9; Wx.strokeStyle='#ff3b3b'; Wx.lineWidth=4; Wx.beginPath(); Wx.arc(fx.x, fx.y, fx.r, 0, 7); Wx.stroke();
       Wx.strokeStyle='#ffd23f'; Wx.lineWidth=4; Wx.beginPath(); Wx.arc(fx.x, fx.y, fx.r*p, 0, 7); Wx.stroke();
       Wx.restore(); return; }
-    if(fx.kind==='miasma'){   // swirling green poison cloud
-      const a=0.32*(1-p*0.6); Wx.globalAlpha=a; Wx.fillStyle='#8fd44a'; Wx.beginPath(); Wx.arc(fx.x, fx.y, fx.r, 0, 7); Wx.fill();
-      Wx.globalAlpha=a*0.7; Wx.fillStyle='#c6f08a'; for(let i=0;i<5;i++){ const ang=fx.t*1.4+i*1.2566; Wx.beginPath(); Wx.arc(fx.x+Math.cos(ang)*fx.r*0.5, fx.y+Math.sin(ang)*fx.r*0.42, fx.r*0.42, 0, 7); Wx.fill(); }
+    if(fx.kind==='miasma'){   // a churning bank of toxic fog that settles over the ground
+      const t=fx.t, fade = p<0.10 ? p/0.10 : (p>0.78 ? Math.max(0,(1-p)/0.22) : 1);
+      Wx.globalAlpha=0.16*fade; Wx.fillStyle='#4c7a1e';                       // sickly stain marking the exact danger circle
+      Wx.beginPath(); Wx.arc(fx.x, fx.y, fx.r, 0, 7); Wx.fill();
+      for(let i=0;i<9;i++){                                                    // billowing puffs drifting on their own orbits
+        const ang=t*(0.45+(i%3)*0.17)+i*0.698, orb=fx.r*(0.20+0.46*(((i*37)%100)/100));
+        const cxp=fx.x+Math.cos(ang)*orb, cyp=fx.y+Math.sin(ang)*orb-Math.sin(t*1.2+i)*5;
+        const rad=fx.r*(0.30+0.15*(((i*53)%100)/100));
+        const g=Wx.createRadialGradient(cxp,cyp,rad*0.12,cxp,cyp,rad);
+        g.addColorStop(0,'rgba(184,238,112,'+(0.30*fade)+')');
+        g.addColorStop(.55,'rgba(126,190,60,'+(0.19*fade)+')');
+        g.addColorStop(1,'rgba(80,130,35,0)');
+        Wx.globalAlpha=1; Wx.fillStyle=g; Wx.beginPath(); Wx.arc(cxp,cyp,rad,0,7); Wx.fill();
+      }
+      Wx.fillStyle='#e2ffa8';                                                   // spores bubbling up out of the cloud
+      for(let i=0;i<12;i++){ const ph=((t*0.5)+i/12)%1, ang=i*2.09;
+        const sx=fx.x+Math.cos(ang)*fx.r*0.7*(0.3+ph*0.6), sy=fx.y+Math.sin(ang)*fx.r*0.55-ph*fx.r*0.5;
+        Wx.globalAlpha=0.75*fade*(1-ph); Wx.beginPath(); Wx.arc(sx,sy,2.4*(1-ph)+1,0,7); Wx.fill(); }
+      Wx.globalAlpha=0.34*fade; Wx.strokeStyle='#a9e05a'; Wx.lineWidth=3; Wx.setLineDash([11,9]);
+      Wx.lineDashOffset=-t*14; Wx.beginPath(); Wx.arc(fx.x, fx.y, fx.r, 0, 7); Wx.stroke(); Wx.setLineDash([]);
       Wx.restore(); return; }
-    if(fx.kind==='shock'){   // expanding plague shockwave ring
-      const rr=fx.maxR*p; Wx.globalAlpha=0.85*(1-p); Wx.strokeStyle='#8fd44a'; Wx.lineWidth=16; Wx.beginPath(); Wx.arc(fx.x, fx.y, rr, 0, 7); Wx.stroke();
-      Wx.globalAlpha=0.5*(1-p); Wx.strokeStyle='#c6f08a'; Wx.lineWidth=6; Wx.beginPath(); Wx.arc(fx.x, fx.y, rr, 0, 7); Wx.stroke();
+    if(fx.kind==='shock'){   // OUTBREAK — a wave of contagion racing outward, bubbling at its edge
+      const rr=fx.maxR*p, fade=1-p;
+      const g=Wx.createRadialGradient(fx.x,fx.y,Math.max(1,rr*0.5),fx.x,fx.y,Math.max(2,rr));   // infected wake trailing the edge
+      g.addColorStop(0,'rgba(120,190,50,0)');
+      g.addColorStop(.72,'rgba(150,215,70,'+(0.20*fade)+')');
+      g.addColorStop(1,'rgba(205,248,135,'+(0.42*fade)+')');
+      Wx.globalAlpha=1; Wx.fillStyle=g; Wx.beginPath(); Wx.arc(fx.x,fx.y,Math.max(2,rr),0,7); Wx.fill();
+      Wx.globalAlpha=0.85*fade; Wx.strokeStyle='#8fd44a'; Wx.lineWidth=13;                       // dense leading edge
+      Wx.beginPath(); Wx.arc(fx.x,fx.y,rr,0,7); Wx.stroke();
+      Wx.globalAlpha=0.95*fade; Wx.strokeStyle='#e2ffa8'; Wx.lineWidth=4;                        // bright crest
+      Wx.beginPath(); Wx.arc(fx.x,fx.y,rr,0,7); Wx.stroke();
+      Wx.globalAlpha=0.8*fade; Wx.fillStyle='#c6f08a';                                           // spore blobs riding the wavefront
+      for(let i=0;i<16;i++){ const a2=i*0.3927+fx.t*1.1, bob=Math.sin(fx.t*8+i)*3.5;
+        Wx.beginPath(); Wx.arc(fx.x+Math.cos(a2)*(rr+bob), fx.y+Math.sin(a2)*(rr+bob), 5*fade+2, 0, 7); Wx.fill(); }
       Wx.restore(); return; }
     if(fx.kind==='beam'){
       Wx.translate(fx.x, fx.y); Wx.rotate(fx.angle);
@@ -4660,6 +4688,13 @@
       Wx.fillStyle=t.enemy?'#5a2a2a':'#455'; Wx.fillRect(t.x-3,t.y-14,6,16); }
 
     for(const p of wProj){ Wx.save(); Wx.globalAlpha=Math.max(0,Math.min(1,p.life));
+      if(p.poison){   // plague bolt — sickly halo and a wake of spores boiling off it
+        Wx.save(); Wx.globalCompositeOperation='lighter';
+        for(let i=1;i<=4;i++){ const tx=p.x-(p.vx||0)*0.011*i, ty=p.y-(p.vy||0)*0.011*i;
+          Wx.globalAlpha=0.34/i; Wx.fillStyle='#a8e85a'; Wx.beginPath(); Wx.arc(tx,ty,9-i*1.4,0,7); Wx.fill(); }
+        Wx.globalAlpha=0.55; const pg=Wx.createRadialGradient(p.x,p.y,1,p.x,p.y,17);
+        pg.addColorStop(0,'rgba(210,255,130,.9)'); pg.addColorStop(.6,'rgba(140,215,60,.35)'); pg.addColorStop(1,'rgba(110,190,45,0)');
+        Wx.fillStyle=pg; Wx.beginPath(); Wx.arc(p.x,p.y,17,0,7); Wx.fill(); Wx.restore(); }
       if(p.owner==='e'){ if(p.icon){ Wx.fillStyle='#222'; Wx.font='24px '+EMO; Wx.textAlign='center'; Wx.textBaseline='middle';
           if(p.angle!==undefined){ Wx.translate(p.x,p.y); Wx.rotate(p.angle); Wx.fillText(p.icon,0,0); } else Wx.fillText(p.icon,p.x,p.y); }
         else { Wx.fillStyle='#b06bff'; Wx.strokeStyle='#1f3b2c'; Wx.lineWidth=3; Wx.beginPath(); Wx.arc(p.x,p.y,11,0,7); Wx.fill(); Wx.stroke(); } }
