@@ -4495,18 +4495,44 @@
         Wx.moveTo(fx.x,fx.y-R*0.28); Wx.lineTo(fx.x,fx.y+R*0.28); Wx.stroke();
       } else {
         const rt=fx.t-lead;
-        Wx.globalAlpha=0.13; Wx.fillStyle='#6b5a2a'; Wx.beginPath(); Wx.arc(fx.x,fx.y,R,0,7); Wx.fill();
-        for(let i=0;i<18;i++){
-          const s1=((i*97)%100)/100, s2=((i*57)%100)/100, ph=((rt*1.7)+s1)%1;
-          const ax=fx.x+(s1-0.5)*R*1.6, gy=fx.y+(s2-0.5)*R*1.25, ay=gy-(1-ph)*250;
-          Wx.globalAlpha=Math.min(1, ph*4)*0.95;
-          Wx.strokeStyle='#e8dcae'; Wx.lineWidth=3;                                    // shaft
-          Wx.beginPath(); Wx.moveTo(ax, ay-24); Wx.lineTo(ax, ay); Wx.stroke();
-          Wx.fillStyle='#cfd6dc'; Wx.beginPath();                                      // head
-          Wx.moveTo(ax,ay+7); Wx.lineTo(ax-4.5,ay-3); Wx.lineTo(ax+4.5,ay-3); Wx.closePath(); Wx.fill();
-          if(ph>0.9){ Wx.globalAlpha=(1-ph)/0.1*0.8; Wx.strokeStyle='#fff2c0'; Wx.lineWidth=2;
-            Wx.beginPath(); Wx.arc(ax,gy,4+(ph-0.9)*90,0,7); Wx.stroke(); }             // impact puff
+        Wx.globalAlpha=0.12; Wx.fillStyle='#ffd23f'; Wx.beginPath(); Wx.arc(fx.x,fx.y,R,0,7); Wx.fill();
+        Wx.globalAlpha=0.30; Wx.strokeStyle='#e0a020'; Wx.lineWidth=2;
+        Wx.beginPath(); Wx.arc(fx.x,fx.y,R,0,7); Wx.stroke();
+        const TILT=0.34, SN=Math.sin(TILT), CS=Math.cos(TILT), L=34, FALL=270;   // arrows come down at a slant
+        const PX=-CS, PY=SN;                                                      // perpendicular, for head & fletching
+        Wx.lineCap='round';
+        for(let i=0;i<16;i++){
+          const s1=((i*73)%100)/100, s2=((i*151)%100)/100, s3=((i*29)%100)/100;
+          const ph=((rt*1.55)+s3)%1;
+          const aa=s1*6.2832, rad=Math.sqrt(s2)*R*0.82;                           // even spread INSIDE the circle
+          const gx=fx.x+Math.cos(aa)*rad, gy=fx.y+Math.sin(aa)*rad;
+          if(ph<0.97){
+            const dist=(1-ph)*FALL, tipX=gx-SN*dist, tipY=gy-CS*dist;
+            const tailX=tipX-SN*L, tailY=tipY-CS*L;
+            Wx.globalAlpha=0.30*ph; Wx.fillStyle='#1f3b2c';                       // shadow tightens as it drops in
+            Wx.beginPath(); Wx.ellipse(gx,gy,9*ph+2,4*ph+1,0,0,7); Wx.fill();
+            Wx.globalAlpha=Math.min(1,ph*5);
+            Wx.strokeStyle='#1f3b2c'; Wx.lineWidth=7;                             // chunky ink outline, like the rest of the art
+            Wx.beginPath(); Wx.moveTo(tailX,tailY); Wx.lineTo(tipX,tipY); Wx.stroke();
+            Wx.strokeStyle='#d8b877'; Wx.lineWidth=3.5;                           // wooden shaft
+            Wx.beginPath(); Wx.moveTo(tailX,tailY); Wx.lineTo(tipX,tipY); Wx.stroke();
+            Wx.fillStyle='#e9eef2'; Wx.strokeStyle='#1f3b2c'; Wx.lineWidth=2.5;   // steel head
+            Wx.beginPath(); Wx.moveTo(tipX+SN*8,tipY+CS*8);
+            Wx.lineTo(tipX+PX*5.5,tipY+PY*5.5); Wx.lineTo(tipX-PX*5.5,tipY-PY*5.5);
+            Wx.closePath(); Wx.fill(); Wx.stroke();
+            Wx.strokeStyle='#ff6b6b'; Wx.lineWidth=3; Wx.beginPath();             // red fletching
+            Wx.moveTo(tailX+PX*6,tailY+PY*6); Wx.lineTo(tailX-SN*7,tailY-CS*7);
+            Wx.moveTo(tailX-PX*6,tailY-PY*6); Wx.lineTo(tailX-SN*7,tailY-CS*7); Wx.stroke();
+          } else {
+            const e=(ph-0.97)/0.03;                                               // thudded home — dust kicks up
+            Wx.globalAlpha=(1-e)*0.85; Wx.strokeStyle='#fff2c0'; Wx.lineWidth=3;
+            Wx.beginPath(); Wx.arc(gx,gy,6+e*26,0,7); Wx.stroke();
+            Wx.globalAlpha=(1-e)*0.55; Wx.fillStyle='#d8c9a0';
+            for(let k=0;k<4;k++){ const ka=k*1.5708+e*2;
+              Wx.beginPath(); Wx.arc(gx+Math.cos(ka)*(8+e*20), gy+Math.sin(ka)*(5+e*12), 2.5*(1-e)+1, 0, 7); Wx.fill(); }
+          }
         }
+        Wx.lineCap='butt';
       }
       Wx.restore(); return; }
     if(fx.kind==='miasma'){   // a churning bank of toxic fog that settles over the ground
