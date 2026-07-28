@@ -3124,8 +3124,20 @@
       if(hit && sfx.hit) sfx.hit(); } }
   function soulSeekers(n,dmg){ sfx.power&&sfx.power(); const a0=aimAngle(); for(let i=0;i<n;i++){ const a=a0+(i-(n-1)/2)*0.4; wProj.push({owner:'p',x:player.x,y:player.y-player.r*0.5,vx:Math.cos(a)*300,vy:Math.sin(a)*300,spd:300,life:2.2,dmg,icon:'👻',angle:a,home:true}); netFx({k:'proj',x:player.x,y:player.y-player.r*0.5,vx:Math.cos(a)*300,vy:Math.sin(a)*300,life:2.2,icon:'👻',angle:a}); } }
   function phaseShift(){ sfx.click&&sfx.click(); const a=aimAngle(); player.x=Math.max(player.r,Math.min(Wc.width-player.r,player.x+Math.cos(a)*240)); player.y=Math.max(player.r,Math.min(Wc.height-player.r,player.y+Math.sin(a)*240)); player.invulT=Math.max(player.invulT,0.6); addFx({kind:'blink',x:player.x,y:player.y,dur:0.3}); netFx({k:'fx',fx:{kind:'blink',x:player.x,y:player.y,dur:0.3}}); }
-  function bansheeWail(radius,dmg){ sfx.crit&&sfx.crit(); addFx({kind:'nova',x:player.x,y:player.y,dur:0.5,radius,dmg:0,color:'#8fc9d6',kb:80,hit:true}); netFx({k:'fx',fx:{kind:'nova',x:player.x,y:player.y,dur:0.5,radius,color:'#8fc9d6',kb:80,hit:true}});
-    for(const b of sceneBots()){ if(Math.hypot(b.x-player.x,b.y-player.y)<radius+b.r){ damageBot(b,dmg); b.fearT=1.6; b.aggro=0; const ka=Math.atan2(b.y-player.y,b.x-player.x); b.x+=Math.cos(ka)*46; b.y+=Math.sin(ka)*46; wFloats.push({x:b.x,y:b.y-b.r-8,val:dmg,life:0.6}); } }
+  // BANSHEE WAIL — a scream that fires blue soul-beams in every direction and DRAGS everything
+  // caught in it toward you, the same vortex pull the Wraith boss uses for Soul Drag.
+  function bansheeWail(radius,dmg){ sfx.crit&&sfx.crit();
+    const N=8, ox=player.x, oy=player.y-player.r*0.5, spin=Math.random()*6.2832;
+    for(let i=0;i<N;i++){ const a=spin+i/N*6.2832;   // ring of blue beams bursting outward
+      addFx({kind:'beam',x:ox,y:oy,angle:a,len:radius,dur:0.45,width:20});
+      netFx({k:'fx',fx:{kind:'beam',x:ox,y:oy,angle:a,len:radius,dur:0.45,width:20}}); }
+    addFx({kind:'nova',x:player.x,y:player.y,dur:0.5,radius,dmg:0,color:'#8fc9d6',kb:0,hit:true});
+    netFx({k:'fx',fx:{kind:'nova',x:player.x,y:player.y,dur:0.5,radius,color:'#8fc9d6',kb:0,hit:true}});
+    for(const b of sceneBots()){ const d=Math.hypot(b.x-player.x,b.y-player.y);
+      if(d<radius+b.r){ damageBot(b,dmg); b.fearT=0; b.aggro=AGGRO_TIME;   // yanked in, so they turn on you instead of fleeing
+        const ka=Math.atan2(player.y-b.y,player.x-b.x), pull=Math.min(Math.max(d-46,0),170);
+        b.x+=Math.cos(ka)*pull; b.y+=Math.sin(ka)*pull;
+        wFloats.push({x:b.x,y:b.y-b.r-8,val:dmg,life:0.6}); } }
     for(const pl of netScenePlayers()){ if(Math.hypot(pl.x-player.x,pl.y-player.y)<radius+pl.r) netHitPlayer(pl.id,dmg); } }
   function barrelRoll(){ sfx.crit&&sfx.crit(); player.swing=0.2;
     const mv=moveVector(); const a = (Math.abs(mv.x)>0.15||Math.abs(mv.y)>0.15) ? Math.atan2(mv.y,mv.x) : (player.face>0?0:Math.PI);   // roll where you're aiming/facing — no auto-target
@@ -3214,7 +3226,17 @@
   function botBladeBeam(bot,a){ wProj.push({owner:'e',from:bot,x:bot.x,y:bot.y-bot.r*0.5,vx:Math.cos(a)*520,vy:Math.sin(a)*520,life:1.3,angle:a,icon:'⚔️'}); }
   function botDash(bot,a){ bot.x=Math.max(bot.r,Math.min(Wc.width-bot.r,bot.x+Math.cos(a)*150)); bot.y=Math.max(bot.r,Math.min(Wc.height-bot.r,bot.y+Math.sin(a)*150)); addFx({kind:'blink',x:bot.x,y:bot.y,dur:0.3}); if(player.hp>0 && Math.hypot(player.x-bot.x,player.y-bot.y)<bot.r+player.r+34) hurtPlayer(botA(bot)+3,false); }
   function botMeteor(bot){ addFx({kind:'strike',x:player.x,y:player.y,r:70,dur:0.85,dmg:botA(bot)+8,hit:false}); }
-  function botAirstrike(bot){ for(let i=0;i<3;i++){ const tx=player.x+(Math.random()*2-1)*90, ty=player.y+(Math.random()*2-1)*80; addFx({kind:'strike',x:Math.max(30,Math.min(Wc.width-30,tx)),y:Math.max(60,Math.min(Wc.height-30,ty)),r:56,dur:0.8+i*0.12,dmg:botA(bot)+5,hit:false}); } }
+  // ENGINEER airstrike — same meteor line the player's version fires, and the bot has to actually AIM it:
+  // the salvo walks outward along its chosen angle, so a bad angle or a moving target means it misses.
+  function botAirstrike(bot, a){
+    const ang = (a==null?0:a) + (Math.random()*2-1)*0.16;   // aim error — it can miss
+    const dmg = botA(bot)+5;
+    for(let i=0;i<4;i++){
+      const tx=Math.max(50,Math.min(Wc.width-50,  bot.x+Math.cos(ang)*(120+i*95)));
+      const ty=Math.max(80,Math.min(Wc.height-50, bot.y+Math.sin(ang)*(120+i*95)));
+      addFx({kind:'meteor', x:tx, y:ty, dur:0.7+i*0.16, dmg, exploded:false, side:'e', owner:bot});
+    }
+  }
   function botIceWall(bot){ const a=Math.atan2(player.y-bot.y,player.x-bot.x),cx=bot.x+Math.cos(a)*55,cy=bot.y+Math.sin(a)*55; const horiz=Math.abs(Math.cos(a))<0.6,hw=horiz?60:14,hh=horiz?14:60; tempWalls.push({x0:cx-hw,y0:cy-hh,x1:cx+hw,y1:cy+hh,dur:5}); }
   function botTrap(bot){ addFx({kind:'bottrap',x:bot.x,y:bot.y,r:70,dps:22,dur:5}); }
   // ---- boss-class bots use the REAL abilities that class gives the player ----
@@ -3245,7 +3267,7 @@
     ranger:  [(b,a)=>botTriple(b,a),    (b,a)=>botDash(b,a),    (b,a)=>botTrap(b)],
     cryo:    [(b,a)=>botIceLance(b,a),  (b,a)=>botFrostNova(b), (b,a)=>botIceWall(b)],
     blade:   [(b,a)=>botWhirl(b),       (b,a)=>botDash(b,a),    (b,a)=>botShield(b)],
-    engi:    [(b,a)=>deployBotTurret(b),(b,a)=>botShield(b),    (b,a)=>botAirstrike(b)],
+    engi:    [(b,a)=>deployBotTurret(b),(b,a)=>botShield(b),    (b,a)=>botAirstrike(b,a)],
     paladin: [(b,a)=>botSlam(b),        (b,a)=>botInvuln(b),    (b,a)=>botHeal(b)],
     ghoulc:    [(b,a)=>bcFeralLeap(b,a), (b,a)=>bcBloodlust(b),  (b,a)=>bcSavageWhirl(b)],   // Feral Leap · Bloodlust · Savage Whirl
     wraithc:   [(b,a)=>bcSeekers(b,a),   (b,a)=>bcPhase(b),      (b,a)=>bcWail(b)],           // Soul Seekers · Phase Shift · Banshee Wail
@@ -3743,7 +3765,11 @@
       else if(fx.kind==='dome'){ if(!fx.ghost){ const o=fx.owner||player; fx.x=o.x; fx.y=o.y; } }
       else if(fx.kind==='meteor' && !fx.exploded && fx.t > fx.dur-0.28){ fx.exploded=true; sfx.crit();
         $('flash').classList.remove('on'); void $('flash').offsetWidth; $('flash').classList.add('on');
-        if(!fx.ghost){ if(inEnemyRoom() && Math.hypot(enemy.x-fx.x, enemy.y-fx.y) < 74+enemy.r) hitEnemy(fx.dmg, true, enemy.x-fx.x, enemy.y-fx.y, 44);
+        if(fx.side==='e'){   // an enemy's airstrike — blows up whoever is standing there, caster excluded
+          if(player.hp>0 && player.invulT<=0 && !godMode && Math.hypot(player.x-fx.x, player.y-fx.y) < 74+player.r) hurtPlayer(fx.dmg||10, false);
+          for(const b of sceneBots()){ if(b===fx.owner) continue; if(Math.hypot(b.x-fx.x, b.y-fx.y) < 74+b.r){ damageBot(b, fx.dmg||10, true); wFloats.push({x:b.x,y:b.y-b.r-8,val:fx.dmg||10,life:0.6}); } }
+        }
+        else if(!fx.ghost){ if(inEnemyRoom() && Math.hypot(enemy.x-fx.x, enemy.y-fx.y) < 74+enemy.r) hitEnemy(fx.dmg, true, enemy.x-fx.x, enemy.y-fx.y, 44);
           for(const pl of netScenePlayers()){ if(Math.hypot(pl.x-fx.x, pl.y-fx.y) < 74+pl.r){ const d=Math.max(1,Math.round((fx.dmg||0)*2)); netHitPlayer(pl.id,d); wFloats.push({x:pl.x,y:pl.y-pl.r-8,val:d,crit:true,life:0.8}); } } }
       }
       else if(fx.kind==='trap'){ if(!fx.ghost) for(const b of sceneBots()){ if(Math.hypot(b.x-fx.x, b.y-fx.y) < fx.r+b.r){ b.hp-=fx.dps*dt; b.regenT=0; if(b.hp<=0)b.alive=false; } } }
