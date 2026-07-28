@@ -2277,7 +2277,7 @@
     wraithc: [
       {icon:'👻', label:'Soul Seekers',key:'Q', max:1.8, run:()=>soulSeekers(3, cls.atk+8)},
       {icon:'🌫️', label:'Phase Shift', key:'E', max:2.4, run:()=>phaseShift()},
-      {icon:'🕳️', label:'Banshee Wail',key:'R', max:16,  run:()=>bansheeWail(185, cls.atk+6)},
+      {icon:'🕳️', label:'Banshee Wail',key:'R', max:4,   run:()=>bansheeWail(185, cls.atk+10)},
     ],
     rotknight: [
       {icon:'🎳', label:'Barrel Roll', key:'Q', max:3,   run:()=>barrelRoll()},
@@ -3133,9 +3133,9 @@
       netFx({k:'fx',fx:{kind:'beam',x:ox,y:oy,angle:a,len:radius,dur:0.6,width:30,soul:true}}); }
     addFx({kind:'nova',x:player.x,y:player.y,dur:0.5,radius,dmg:0,color:'#8fc9d6',kb:0,hit:true});
     netFx({k:'fx',fx:{kind:'nova',x:player.x,y:player.y,dur:0.5,radius,color:'#8fc9d6',kb:0,hit:true}});
-    // the scream tears open a black hole that sits there for 5s, swallowing everything nearby
-    addFx({kind:'blackhole', x:player.x, y:player.y, r:radius, dur:5, dmg, dtick:0, anim:0});
-    netFx({k:'fx', fx:{kind:'blackhole', x:player.x, y:player.y, r:radius, dur:5, dmg, dtick:0, anim:0}}); }
+    // the scream tears open a black hole that sits there for 1.5s, swallowing everything nearby
+    addFx({kind:'blackhole', x:player.x, y:player.y, r:radius, dur:1.5, dmg, dtick:0, anim:0});
+    netFx({k:'fx', fx:{kind:'blackhole', x:player.x, y:player.y, r:radius, dur:1.5, dmg, dtick:0, anim:0}}); }
   function barrelRoll(){ sfx.crit&&sfx.crit(); player.swing=0.2;
     const mv=moveVector(); const a = (Math.abs(mv.x)>0.15||Math.abs(mv.y)>0.15) ? Math.atan2(mv.y,mv.x) : (player.face>0?0:Math.PI);   // roll where you're aiming/facing — no auto-target
     player.rollA=a; player.rollT=0.55; player.rollHit=new Set(); player.rollSpin=0; player.face=Math.cos(a)>=0?1:-1; }
