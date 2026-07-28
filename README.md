@@ -118,5 +118,3 @@ Any static file server works — the project is a single static asset.
 ```
 
 That's the whole project. Everything — rendering, 20 classes, bots, the storm, the boss ladder, achievements, the battle pass, mobile controls, and the optional multiplayer bridge — lives in `index.html`.
-
-<!-- auto-commit hook test 1785239675 -->
