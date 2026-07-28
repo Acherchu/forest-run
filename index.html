@@ -2242,7 +2242,7 @@
     ranger: [
       {icon:'🏹', label:'Triple Shot', key:'Q', max:1.4, run:()=>tripleShot(520, cls.atk+6)},
       {icon:'🤸', label:'Roll',        key:'E', max:2.2, run:()=>rollDodge()},
-      {icon:'🪤', label:'Spike Trap',  key:'R', max:5,   run:()=>dropTrap(72, 26, 5)},
+      {icon:'🎯', label:'Arrow Volley',key:'R', max:7,   run:()=>arrowVolley(95, cls.atk)},
     ],
     cryo: [
       {icon:'🧊', label:'Ice Lance',  key:'Q', max:1.3, run:()=>fireBolt(560, cls.atk+8, '🧊', true, 0.5)},
@@ -3051,7 +3051,14 @@
   }
   function rollDodge(){ sfx.click(); player.hasteT=1.2; player.invulT=0.5; player.swing=0.15;
     const a=aimAngle(); player.x=Math.max(player.r,Math.min(Wc.width-player.r, player.x+Math.cos(a)*130)); player.y=Math.max(player.r,Math.min(Wc.height-player.r, player.y+Math.sin(a)*130)); }
-  function dropTrap(radius, dps, dur){ sfx.tick(); addFx({kind:'trap', x:player.x, y:player.y, r:radius, dps, dur}); netFx({k:'fx', fx:{kind:'trap', x:player.x, y:player.y, r:radius, dps:0, dur}}); }
+  // ARROW VOLLEY — call a barrage down on a spot you aim at. It telegraphs first, so it can be walked
+  // out of (unlike the old trap, which just chewed up anything that touched you with no counterplay).
+  function arrowVolley(radius, dmg){ sfx.power&&sfx.power();
+    const a=aimAngle(); player.face=Math.cos(a)>=0?1:-1;
+    const tx=Math.max(60,Math.min(Wc.width-60,  player.x+Math.cos(a)*230));
+    const ty=Math.max(70,Math.min(Wc.height-60, player.y+Math.sin(a)*230));
+    addFx({kind:'volley', side:'p', x:tx, y:ty, r:radius, dur:1.6, dmg, wtick:0});
+    netFx({k:'fx', fx:{kind:'volley', x:tx, y:ty, r:radius, dur:1.6, dmg, wtick:0}}); }
   function lifeMelee(base, kb, healFrac){
     if(!inEnemyRoom()){ sfx.tick(); return; }
     const dx=enemy.x-player.x, dy=enemy.y-player.y, d=Math.hypot(dx,dy); player.face=dx>=0?1:-1;
@@ -3763,6 +3770,13 @@
         else { for(const pl of netScenePlayers()){ if(Math.hypot(pl.x-fx.x, pl.y-fx.y) < cur+pl.r){ fx.hit=true; const crit=Math.random()<cls.crit, d=Math.max(1,Math.round(fx.dmg*(crit?2:1))); netHitPlayer(pl.id,d); wFloats.push({x:pl.x,y:pl.y-pl.r-8,val:d,crit,life:0.8}); crit?sfx.crit():sfx.hit(); break; } } }
       } else if(fx.kind==='healzone'){ if(!fx.ghost && Math.hypot(player.x-fx.x, player.y-fx.y) < fx.r){ player.hp=Math.min(player.max, player.hp+fx.dps*dt);
         if(Math.random()<dt*3) wFloats.push({x:player.x+(Math.random()-.5)*16, y:player.y-player.r, val:'+', heal:true, life:0.6}); } }
+      else if(fx.kind==='volley'){   // arrows only start landing after the telegraph, so the zone can be escaped
+        if(fx.t>0.55 && fx.side==='p' && !fx.ghost){
+          fx.wtick=(fx.wtick||0)-dt;
+          if(fx.wtick<=0){ fx.wtick=0.3; let any=false;
+            for(const b of sceneBots()){ if(Math.hypot(b.x-fx.x,b.y-fx.y)<fx.r+b.r){ const d=Math.round(fx.dmg); damageBot(b,d); wFloats.push({x:b.x,y:b.y-b.r-8,val:d,life:0.5}); any=true; } }
+            for(const pl of netScenePlayers()){ if(Math.hypot(pl.x-fx.x,pl.y-fx.y)<fx.r+pl.r){ netHitPlayer(pl.id, Math.round(fx.dmg)); any=true; } }
+            if(any && sfx.hit) sfx.hit(); } } }
       else if(fx.kind==='blackhole'){ fx.anim=(fx.anim||0)+dt;   // persistent vortex: keeps sucking everything in
         if(!fx.ghost){
           fx.dtick=(fx.dtick||0)-dt; const tick = fx.dtick<=0; if(tick) fx.dtick=0.5;
@@ -4466,6 +4480,34 @@
       Wx.globalAlpha=0.28+0.22*Math.sin(fx.t*22); Wx.fillStyle='#ff5a5a'; Wx.beginPath(); Wx.arc(fx.x, fx.y, fx.r, 0, 7); Wx.fill();
       Wx.globalAlpha=0.9; Wx.strokeStyle='#ff3b3b'; Wx.lineWidth=4; Wx.beginPath(); Wx.arc(fx.x, fx.y, fx.r, 0, 7); Wx.stroke();
       Wx.strokeStyle='#ffd23f'; Wx.lineWidth=4; Wx.beginPath(); Wx.arc(fx.x, fx.y, fx.r*p, 0, 7); Wx.stroke();
+      Wx.restore(); return; }
+    if(fx.kind==='volley'){   // ARROW VOLLEY — reticle locks on, then a barrage rains into the zone
+      const lead=0.55, R=fx.r;
+      if(fx.t<lead){
+        const q=fx.t/lead;
+        Wx.globalAlpha=0.16; Wx.fillStyle='#ffd23f'; Wx.beginPath(); Wx.arc(fx.x,fx.y,R,0,7); Wx.fill();
+        Wx.globalAlpha=0.35+0.3*Math.sin(fx.t*20); Wx.strokeStyle='#ffd23f'; Wx.lineWidth=3;
+        Wx.setLineDash([9,8]); Wx.lineDashOffset=-fx.t*34;
+        Wx.beginPath(); Wx.arc(fx.x,fx.y,R,0,7); Wx.stroke(); Wx.setLineDash([]);
+        Wx.globalAlpha=0.75; Wx.strokeStyle='#fff6c9'; Wx.lineWidth=2;                 // closing lock-on ring
+        Wx.beginPath(); Wx.arc(fx.x,fx.y,R*(1-q*0.55),0,7); Wx.stroke();
+        Wx.beginPath(); Wx.moveTo(fx.x-R*0.28,fx.y); Wx.lineTo(fx.x+R*0.28,fx.y);      // crosshair
+        Wx.moveTo(fx.x,fx.y-R*0.28); Wx.lineTo(fx.x,fx.y+R*0.28); Wx.stroke();
+      } else {
+        const rt=fx.t-lead;
+        Wx.globalAlpha=0.13; Wx.fillStyle='#6b5a2a'; Wx.beginPath(); Wx.arc(fx.x,fx.y,R,0,7); Wx.fill();
+        for(let i=0;i<18;i++){
+          const s1=((i*97)%100)/100, s2=((i*57)%100)/100, ph=((rt*1.7)+s1)%1;
+          const ax=fx.x+(s1-0.5)*R*1.6, gy=fx.y+(s2-0.5)*R*1.25, ay=gy-(1-ph)*250;
+          Wx.globalAlpha=Math.min(1, ph*4)*0.95;
+          Wx.strokeStyle='#e8dcae'; Wx.lineWidth=3;                                    // shaft
+          Wx.beginPath(); Wx.moveTo(ax, ay-24); Wx.lineTo(ax, ay); Wx.stroke();
+          Wx.fillStyle='#cfd6dc'; Wx.beginPath();                                      // head
+          Wx.moveTo(ax,ay+7); Wx.lineTo(ax-4.5,ay-3); Wx.lineTo(ax+4.5,ay-3); Wx.closePath(); Wx.fill();
+          if(ph>0.9){ Wx.globalAlpha=(1-ph)/0.1*0.8; Wx.strokeStyle='#fff2c0'; Wx.lineWidth=2;
+            Wx.beginPath(); Wx.arc(ax,gy,4+(ph-0.9)*90,0,7); Wx.stroke(); }             // impact puff
+        }
+      }
       Wx.restore(); return; }
     if(fx.kind==='miasma'){   // a churning bank of toxic fog that settles over the ground
       const t=fx.t, fade = p<0.10 ? p/0.10 : (p>0.78 ? Math.max(0,(1-p)/0.22) : 1);
