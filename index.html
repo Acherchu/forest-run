@@ -2286,7 +2286,7 @@
     ],
     plaguec: [
       {icon:'🌫️', label:'Outbreak', key:'Q', max:5,   run:()=>outbreak(cls.atk+6)},
-      {icon:'🦠', label:'Infect',   key:'E', max:1.6, run:()=>infectBolt(cls.atk+4)},
+      {icon:'🤮', label:'Poison Spit',key:'E', max:2.2, run:()=>poisonSpit(cls.atk+2)},
       {icon:'☁️', label:'Miasma',   key:'R', max:6,   run:()=>miasma(150, cls.atk+8, 5)},
     ],
     revenantc: [
@@ -3157,8 +3157,18 @@
     for(const pl of netScenePlayers()){ const ex=pl.x-ox,ey=pl.y-oy,al=ex*Math.cos(a)+ey*Math.sin(a),pp=Math.abs(-ex*Math.sin(a)+ey*Math.cos(a)); if(al>0&&al<len&&pp<pl.r+26){ netHitPlayer(pl.id,dmg); healed=true; } }
     if(healed){ const h=Math.round(player.max*0.05); player.hp=Math.min(player.max,player.hp+h); wFloats.push({x:player.x,y:player.y-player.r-10,val:'+'+h,heal:true,life:0.7}); } }
   function outbreak(dmg){ sfx.power&&sfx.power(); addFx({kind:'shock',side:'p',x:player.x,y:player.y,maxR:320,dur:1.2,dmg,hit:false}); }
-  function infectBolt(dmg){ sfx.power&&sfx.power(); const a=enemyAim(); player.face=Math.cos(a)>=0?1:-1; const dps=Math.max(4,Math.round(cls.atk*0.7));
-    wProj.push({owner:'p',x:player.x,y:player.y-player.r*0.5,vx:Math.cos(a)*480,vy:Math.sin(a)*480,life:1.7,dmg,icon:'🦠',angle:a,poison:{t:5,dps}}); netFx({k:'proj',x:player.x,y:player.y-player.r*0.5,vx:Math.cos(a)*480,vy:Math.sin(a)*480,life:1.7,icon:'🦠',angle:a}); }
+  // POISON SPIT — hock a spray of venom globs; whatever they hit gets poisoned, and wherever they
+  // land they burst into a lingering toxic puddle, so it also denies the ground in front of you.
+  function poisonSpit(dmg){ sfx.power&&sfx.power();
+    const a0=aimAngle(); player.face=Math.cos(a0)>=0?1:-1; player.swing=0.18;
+    const dps=Math.max(4,Math.round(cls.atk*0.7)), pdps=Math.max(6,Math.round(cls.atk*0.8));
+    for(let i=0;i<5;i++){
+      const a=a0+(i-2)*0.135+(Math.random()-0.5)*0.06, spd=340+Math.random()*150;
+      wProj.push({owner:'p', x:player.x, y:player.y-player.r*0.5, vx:Math.cos(a)*spd, vy:Math.sin(a)*spd,
+        life:0.42+Math.random()*0.2, dmg, angle:a, glob:true, poison:{t:4,dps},
+        spit:{r:46, dur:3, dps:pdps}});
+      netFx({k:'proj', x:player.x, y:player.y-player.r*0.5, vx:Math.cos(a)*spd, vy:Math.sin(a)*spd, life:0.5, icon:'🦠', angle:a});
+    } }
   function miasma(radius,dps,dur){ sfx.power&&sfx.power(); addFx({kind:'miasma',side:'p',x:player.x,y:player.y,r:radius,dur,dps,dtick:0}); netFx({k:'fx',fx:{kind:'nova',x:player.x,y:player.y,dur:0.5,radius,color:'#8fd44a',kb:0,hit:true}}); }
   function devour(radius,dmg){ sfx.crit&&sfx.crit(); addFx({kind:'nova',x:player.x,y:player.y,dur:0.5,radius,dmg:0,color:'#d67a7a',kb:0,hit:true}); netFx({k:'fx',fx:{kind:'nova',x:player.x,y:player.y,dur:0.5,radius,color:'#d67a7a',kb:0,hit:true}});
     for(const b of sceneBots()){ const dd=Math.hypot(b.x-player.x,b.y-player.y); if(dd<radius+b.r && dd>1){ const ka=Math.atan2(player.y-b.y,player.x-b.x); b.x+=Math.cos(ka)*Math.min(90,dd*0.6); b.y+=Math.sin(ka)*Math.min(90,dd*0.6); damageBot(b,dmg); wFloats.push({x:b.x,y:b.y-b.r-8,val:dmg,life:0.6}); } }
@@ -3754,6 +3764,9 @@
       }
       if(!p.dead && projBlocked(p.x,p.y)) p.dead=true;
       if(p.x<-40||p.x>Wc.width+40||p.y<-40||p.y>Wc.height+40) p.dead=true; }
+    for(const p of wProj){   // spit globs splatter into a lingering puddle wherever they come down
+      if(p.spit && !p.splatted && (p.life<=0 || p.dead)){ p.splatted=true;
+        addFx({kind:'miasma', side:'p', x:p.x, y:p.y, r:p.spit.r, dur:p.spit.dur, dps:p.spit.dps, dtick:0}); } }
     wProj=wProj.filter(p=>p.life>0 && !p.dead);
 
     // natural healing after 5s without taking any damage
@@ -4708,6 +4721,11 @@
     // projectiles
     for(const p of wProj){ Wx.save(); Wx.globalAlpha=Math.max(0,Math.min(1,p.life));
       if(p.kind==='slash'){ Wx.translate(p.x,p.y); Wx.rotate(p.angle); Wx.strokeStyle='#eaffe0'; Wx.lineWidth=9; Wx.beginPath(); Wx.arc(0,0,26,-1.1,1.1); Wx.stroke(); }
+      else if(p.glob){ const wob=1+0.18*Math.sin((p.life||0)*30);   // venom glob (spat indoors too)
+        Wx.translate(p.x,p.y); Wx.rotate(p.angle||0);
+        Wx.fillStyle='#1f3b2c'; Wx.beginPath(); Wx.ellipse(0,0,9*wob,7.5/wob,0,0,7); Wx.fill();
+        Wx.fillStyle='#8fd44a'; Wx.beginPath(); Wx.ellipse(0,0,6.5*wob,5.2/wob,0,0,7); Wx.fill();
+        Wx.fillStyle='#e2ffa8'; Wx.beginPath(); Wx.ellipse(-1.6,-1.6,2.2,1.7,0,0,7); Wx.fill(); }
       else { Wx.fillStyle='#222'; Wx.font='24px '+EMO; Wx.textAlign='center'; Wx.textBaseline='middle';
         if(p.angle!==undefined){ Wx.translate(p.x,p.y); Wx.rotate(p.angle); Wx.fillText(p.icon||'🔥',0,0); } else Wx.fillText(p.icon||'🔥',p.x,p.y); } Wx.restore(); }
     for(const fx of wFx) drawFx(fx);
@@ -4766,6 +4784,16 @@
       if(p.owner==='e'){ if(p.icon){ Wx.fillStyle='#222'; Wx.font='24px '+EMO; Wx.textAlign='center'; Wx.textBaseline='middle';
           if(p.angle!==undefined){ Wx.translate(p.x,p.y); Wx.rotate(p.angle); Wx.fillText(p.icon,0,0); } else Wx.fillText(p.icon,p.x,p.y); }
         else { Wx.fillStyle='#b06bff'; Wx.strokeStyle='#1f3b2c'; Wx.lineWidth=3; Wx.beginPath(); Wx.arc(p.x,p.y,11,0,7); Wx.fill(); Wx.stroke(); } }
+      else if(p.glob){   // venom glob — a wobbling blob with a trailing dribble
+        const wob=1+0.18*Math.sin((p.life||0)*30);
+        Wx.save(); Wx.translate(p.x,p.y); Wx.rotate(p.angle||0);
+        Wx.globalAlpha=0.5; Wx.fillStyle='#6ba838';
+        Wx.beginPath(); Wx.ellipse(-11,0,7,3.2,0,0,7); Wx.fill();
+        Wx.globalAlpha=1; Wx.fillStyle='#1f3b2c';
+        Wx.beginPath(); Wx.ellipse(0,0,9*wob,7.5/wob,0,0,7); Wx.fill();
+        Wx.fillStyle='#8fd44a'; Wx.beginPath(); Wx.ellipse(0,0,6.5*wob,5.2/wob,0,0,7); Wx.fill();
+        Wx.fillStyle='#e2ffa8'; Wx.beginPath(); Wx.ellipse(-1.6,-1.6,2.2,1.7,0,0,7); Wx.fill();
+        Wx.restore(); }
       else if(p.kind==='slash'){ Wx.translate(p.x,p.y); Wx.rotate(p.angle);
         Wx.strokeStyle='#eaffe0'; Wx.lineWidth=9; Wx.beginPath(); Wx.arc(0,0,26,-1.1,1.1); Wx.stroke();
         Wx.strokeStyle='#7dff6a'; Wx.lineWidth=4; Wx.beginPath(); Wx.arc(0,0,26,-1.05,1.05); Wx.stroke(); }
